@@ -4362,6 +4362,14 @@ double Analyzer::calculateLeptonMetMt(const TLorentzVector& Tobj) {
   return (mt2 >= 0) ? sqrt(mt2) : -1;
 }
 
+double Analyzer::calculateLeptonMetMt(const TLorentzVector& Tobj, const TLorentzVector& met) {
+  double px = Tobj.Px() + met.Px();
+  double py = Tobj.Py() + met.Py();
+  double et = Tobj.Et() + met.E();
+  double mt2 = et*et - (px*px + py*py);
+  return (mt2 >= 0) ? sqrt(mt2) : -1;
+}
+
 
 /////Calculate the diparticle mass based on how to calculate it
 ///can use Collinear Approximation, which can fail (number failed available in a histogram)
@@ -5588,7 +5596,10 @@ void Analyzer::fill_Folder(std::string group, const int max, Histogramer &ihisto
         }
       }
       if(part->type != PType::Jet) {
-        histAddVal(calculateLeptonMetMt(part->p4(it)), "MetMt");
+        // if PType is muon and muons are treating as neutrinos
+        const bool use_jer_corr_met = ((part->type == PType::Muon) and (distats["Run"].bfind("TreatMuonsAsNeutrinos") || distats["Run"].bfind("TreatOnlyOneMuonAsNeutrino")));
+        const TLorentzVector& met_p4 = use_jer_corr_met ? _MET->JERCorrMet : _MET->p4();
+        histAddVal(calculateLeptonMetMt(part->p4(it), met_p4), "MetMt");
       }
       if(part->type == PType::FatJet ) {
         histAddVal(_FatJet->PrunedMass[it], "PrunedMass");
