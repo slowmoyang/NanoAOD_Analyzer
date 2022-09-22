@@ -1,5 +1,6 @@
 #include "Analyzer.h"
 #include "Compression.h"
+#include "TSystem.h"
 #include <regex>
 #include <sstream>
 #include <cmath>
@@ -93,6 +94,11 @@ const std::map<PType, float> leptonmasses = {
 ///Constructor
 Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool setCR, std::string configFolder, std::string year) : goodParts(getArray()), genName_regex(".*([A-Z][^[:space:]]+)"){
   std::cout << "setup start" << std::endl;
+
+  if (gSystem->AccessPathName(PUSPACE.c_str())) {
+    std::cerr << "PUSPACE not found: " << PUSPACE << std::endl;
+    std::abort();
+  }
 
   routfile = TFile::Open(outfile.c_str(), "RECREATE", outfile.c_str(), ROOT::CompressionSettings(ROOT::kLZMA, 9));
 
@@ -6248,9 +6254,9 @@ void Analyzer::initializeWkfactor(std::vector<std::string> infiles) {
     return;
   }
   //W-jet k-factor Histograms:
-  TFile k_ele("Pileup/k_faktors_ele.root");
-  TFile k_mu("Pileup/k_faktors_mu.root");
-  TFile k_tau("Pileup/k_faktors_tau.root");
+  TFile k_ele((PUSPACE + "k_faktors_ele.root").c_str());
+  TFile k_mu((PUSPACE + "k_faktors_mu.root").c_str());
+  TFile k_tau((PUSPACE + "k_faktors_tau.root").c_str());
 
   k_ele_h =dynamic_cast<TH1D*>(k_ele.FindObjectAny("k_fac_m"));
   k_mu_h  =dynamic_cast<TH1D*>(k_mu.FindObjectAny("k_fac_m"));
