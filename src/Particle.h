@@ -209,6 +209,9 @@ public:
   int matchingMuonIdx1[MAXINDEX];
   int matchingMuonIdx2[MAXINDEX];
   int genJetIdx[MAXINDEX];
+  float qgl[MAXINDEX];
+  int nConstituents[MAXINDEX];
+  int nElectrons[MAXINDEX];
 
  protected:
 

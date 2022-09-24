@@ -288,6 +288,10 @@ Jet::Jet(TTree* _BOOM, std::string filename, std::vector<std::string> syst_names
   SetBranch("Jet_rawFactor", rawFactor); // JEC
   SetBranch("Jet_muonIdx1", matchingMuonIdx1);
   SetBranch("Jet_muonIdx2", matchingMuonIdx2);
+  SetBranch("Jet_qgl", qgl);
+  SetBranch("Jet_nConstituents", nConstituents);
+  SetBranch("Jet_nElectrons", nElectrons);
+  SetBranch("Jet_nMuons", nMuons);
 
   if(_BOOM->FindBranch("Jet_partonFlavour")!=0){
     SetBranch("Jet_partonFlavour", partonFlavour);

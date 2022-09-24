@@ -302,6 +302,47 @@ public:
   std::vector<std::pair<double, int> > jetPtIndexVector;
 
   // std::unordered_map< std::string,float > zBoostTree;
+  void fill_Tree();
+  const std::string tree_name_ = "InvCh_NDiJetCombinations";
+  // float
+  std::unordered_map<std::string, float> branches_;
+  const std::vector<std::string> branche_names_ = {
+      "LargestDiJetMass",
+      "Jet3MinAbsDPhiMet",
+      "LargestMassDiJetPosSideJetQGL",
+      "LargestMassDiJetNegSideJetQGL",
+      "Met",
+      "MetPhi",
+      "Weight",
+  };
+  // int
+  std::unordered_map<std::string, int> int_branches_;
+  const std::vector<std::string> int_branch_names_ = {
+      "jet_size"
+  };
+  // vector<float>
+  std::unordered_map<std::string, std::vector<float>* > float_vec_branches_;
+  const std::vector<std::string> float_vec_branch_names_ = {
+      "jet_pt",
+      "jet_eta",
+      "jet_phi",
+      "jet_mass",
+      "jet_chEmEf",
+      "jet_chHEF",
+      "jet_neEmEF",
+      "jet_neHEF",
+      "jet_qgl",
+      "jet_area",
+  };
+  // vector<int>
+  std::unordered_map<std::string, std::vector<int>* > int_vec_branches_;
+  const std::vector<std::string> int_vec_branch_names_ = {
+      "jet_nConstituents",
+      "jet_nElectrons",
+      "jet_nMuons",
+  };
+
+
 
   double maxIso, minIso;
   int leadIndex, maxCut, crbins=1;

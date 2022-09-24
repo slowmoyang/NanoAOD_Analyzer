@@ -232,6 +232,26 @@ Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool s
   histo = Histogramer(1, filespace+"Hist_entries.in", filespace+"Cuts.in", outfile, isData, cr_variables);
   if(doSystematics)
     syst_histo=Histogramer(1, filespace+"Hist_syst_entries.in", filespace+"Cuts.in", outfile, isData, cr_variables,syst_names);
+  for (const auto& branch_name : branche_names_) {
+    branches_[branch_name] = 0.0f;
+  }
+  histo.createTree(&branches_, tree_name_);
+  if (TTree* tree = histo.getTree(tree_name_)) {
+    for (const auto& branch_name : int_branch_names_) {
+      int_branches_[branch_name] = 0;
+      tree->Branch(branch_name.c_str(), &int_branches_[branch_name], (branch_name + "/I").c_str());
+    }
+    for (const auto& branch_name : float_vec_branch_names_) {
+      float_vec_branches_[branch_name] = new std::vector<float>();
+      tree->Branch(branch_name.c_str(), "std::vector<float>", &(float_vec_branches_[branch_name]));
+    }
+    for (const auto& branch_name : int_vec_branch_names_) {
+      int_vec_branches_[branch_name] = new std::vector<int>();
+      tree->Branch(branch_name.c_str(), "std::vector<int>", &(int_vec_branches_[branch_name]));
+    }
+  }
+
+
 
   systematics = Systematics(distats);
 
@@ -5119,9 +5139,9 @@ void Analyzer::fill_histogram(std::string year) {
       for(auto it: *groups) {
         fill_Folder(it, maxCut, histo, false);
       }
-      //if(!fillCuts(false)) {
-      //  fill_Tree();
-      //}
+      if(fillCuts(false)) {
+        fill_Tree();
+      }
 
     }else{
       wgt=backup_wgt;
@@ -5881,6 +5901,8 @@ void Analyzer::fill_Folder(std::string group, const int max, Histogramer &ihisto
     float leaddijetdeltaEta = 0;
     float etaproduct = 0;
     float largestMassDeltaEta = 0; // added by Kyungmin
+    float largest_mass_qgl_1 = -1.0f;
+    float largest_mass_qgl_2 = -1.0f;
 
     for(auto it : *active_part->at(CUTS::eDiJet)) {
       int p1 = (it) / _Jet->size();
@@ -5893,6 +5915,8 @@ void Analyzer::fill_Folder(std::string group, const int max, Histogramer &ihisto
         leaddijetmass = DiJet.M();
         etaproduct = (jet1.Eta() * jet2.Eta() > 0) ? 1 : -1;
         largestMassDeltaEta = fabs(jet1.Eta() - jet2.Eta());
+        largest_mass_qgl_1 = _Jet->qgl[p1];
+        largest_mass_qgl_2 = _Jet->qgl[p2];
       }
       if(DiJet.Pt() > leaddijetpt) leaddijetpt = DiJet.Pt();
       if(fabs(jet1.Eta() - jet2.Eta()) > leaddijetdeltaEta) leaddijetdeltaEta = fabs(jet1.Eta() - jet2.Eta());
@@ -5911,6 +5935,7 @@ void Analyzer::fill_Folder(std::string group, const int max, Histogramer &ihisto
     histAddVal(leaddijetdeltaR, "LargestDeltaR");
     histAddVal(etaproduct, "LargestMassEtaProduct");
     histAddVal(largestMassDeltaEta, "LargestMassDeltaEta");
+    histAddVal2(largest_mass_qgl_1, largest_mass_qgl_2, "LargestMassQGL");
 
     for(auto index : *(active_part->at(CUTS::eRTau1)) ) {
       histAddVal2(calculateLeptonMetMt(_Tau->p4(index)), leaddijetmass, "mTvsLeadingMass");
@@ -6135,6 +6160,94 @@ void Analyzer::fill_Tree(){
   }
 }
 */
+
+void Analyzer::fill_Tree() {
+  if (active_part->at(CUTS::eDiJet)->empty()) {
+    return;
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // LargestDiJetMass
+  //////////////////////////////////////////////////////////////////////////////
+  float leaddijetmass = 0.0f;
+  float qgl_pos = 0.0f, qgl_neg = 0.0f;
+  for (const auto it : *active_part->at(CUTS::eDiJet)) {
+    const int p1 = (it) / _Jet->size();
+    const int p2 = (it) % _Jet->size();
+    const TLorentzVector jet1 = _Jet->p4(p1);
+    const TLorentzVector jet2 = _Jet->p4(p2);
+    const TLorentzVector DiJet = jet1 + jet2;
+
+    if (DiJet.M() > leaddijetmass) {
+      leaddijetmass = DiJet.M();
+
+      if (jet1.Eta() > 0) {
+        qgl_pos = _Jet->qgl[p1];
+        qgl_neg = _Jet->qgl[p2];
+      } else {
+        qgl_pos = _Jet->qgl[p2];
+        qgl_neg = _Jet->qgl[p1];
+      }
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Jet3MinAbsDPhiMet
+  //////////////////////////////////////////////////////////////////////////////
+  float minDeltaPhiMet = 9999.9;
+  for(auto it : *active_part->at(CUTS::eRJet3)) {
+    float deltaPhiMet = absnormPhi(_Jet->p4(it).Phi() - _MET->phi());
+    if(deltaPhiMet < minDeltaPhiMet){
+       minDeltaPhiMet = deltaPhiMet;
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // NOTE
+  //////////////////////////////////////////////////////////////////////////////
+  for (auto it : float_vec_branches_) {
+    it.second->clear();
+  }
+  for (auto it : int_vec_branches_) {
+    it.second->clear();
+  }
+
+  const int jet_size = static_cast<int>(active_part->at(CUTS::eRJet1)->size());
+  int_branches_["jet_size"] = jet_size;
+  // TODO reserve
+
+  for(auto idx : *active_part->at(CUTS::eRJet1)) {
+    float_vec_branches_.at("jet_pt")->push_back(_Jet->pt(idx));
+    float_vec_branches_.at("jet_eta")->push_back(_Jet->eta(idx));
+    float_vec_branches_.at("jet_phi")->push_back(_Jet->phi(idx));
+    float_vec_branches_.at("jet_mass")->push_back(_Jet->mass(idx));
+    float_vec_branches_.at("jet_chEmEf")->push_back(_Jet->chargedEmEnergyFraction[idx]);
+    float_vec_branches_.at("jet_chHEF")->push_back(_Jet->chargedHadronEnergyFraction[idx]);
+    float_vec_branches_.at("jet_neEmEF")->push_back(_Jet->neutralEmEnergyFraction[idx]);
+    float_vec_branches_.at("jet_neHEF")->push_back(_Jet->neutralHadEnergyFraction[idx]);
+    float_vec_branches_.at("jet_qgl")->push_back(_Jet->qgl[idx]);
+    float_vec_branches_.at("jet_area")->push_back(_Jet->area[idx]);
+
+    int_vec_branches_.at("jet_nConstituents")->push_back(_Jet->nConstituents[idx]);
+    int_vec_branches_.at("jet_nElectrons")->push_back(_Jet->nElectrons[idx]);
+    int_vec_branches_.at("jet_nMuons")->push_back(_Jet->nMuons[idx]);
+  }
+
+  // LargestDiJetMass
+  branches_["LargestDiJetMass"] = leaddijetmass;
+  // Jet3MinAbsDPhiMet
+  branches_["Jet3MinAbsDPhiMet"] = minDeltaPhiMet;
+  // QGL
+  branches_["LargestMassDiJetPosSideJetQGL"] = qgl_pos;
+  branches_["LargestMassDiJetNegSideJetQGL"] = qgl_neg;
+  // MET
+  branches_["Met"] = _MET->pt();
+  branches_["MetPhi"] = _MET->phi();
+  branches_["Weight"] = wgt;
+
+  histo.fillTree(tree_name_);
+}
+
 
 void Analyzer::initializePileupInfo(const bool& specialPU, std::string outfilename){
    // If specialPUcalculation is true, then take the name of the output file (when submitting jobs)

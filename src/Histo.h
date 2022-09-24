@@ -49,6 +49,7 @@ public:
   void createTree(std::unordered_map< std::string , float >*, std::string);
   void fillTree(std::string);
   std::string outname;
+  TTree* getTree(const std::string treename) {return trees.at(treename);}
 
 
 private:
