@@ -254,8 +254,8 @@ void Met::propagateUnclEnergyUncty(std::string& systname, int syst){
     }
     else if(systname.find("_Down") != std::string::npos){
 
-    met_px_unclEnshift = met_px_unclEnshift + MetUnclDown[0];
-    met_py_unclEnshift = met_py_unclEnshift + MetUnclDown[1];
+    met_px_unclEnshift = met_px_unclEnshift - MetUnclDown[0];
+    met_py_unclEnshift = met_py_unclEnshift - MetUnclDown[1];
   }
 
   systRawMetVec.at(syst)->SetPxPyPzE(met_px_unclEnshift, met_py_unclEnshift, systRawMetVec.at(syst)->Pz(), TMath::Sqrt(pow(met_px_unclEnshift,2) + pow(met_py_unclEnshift,2)));
