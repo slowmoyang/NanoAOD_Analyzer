@@ -233,6 +233,25 @@ Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool s
   if(doSystematics)
     syst_histo=Histogramer(1, filespace+"Hist_syst_entries.in", filespace+"Cuts.in", outfile, isData, cr_variables,syst_names);
 
+  for (const auto& branch_name : branche_names_) {
+    branch_float_[branch_name] = 0.0f;
+  }
+  histo.createTree(&branch_float_, tree_name_);
+  if (TTree* tree = histo.getTree(tree_name_)) {
+    for (const auto& branch_name : int_branch_names_) {
+      branch_int_[branch_name] = 0;
+      tree->Branch(branch_name.c_str(), &branch_int_[branch_name], (branch_name + "/I").c_str());
+    }
+    for (const auto& branch_name : branch_name_float_vec_) {
+      branch_float_vec_[branch_name] = new std::vector<float>();
+      tree->Branch(branch_name.c_str(), "std::vector<float>", &(branch_float_vec_[branch_name]));
+    }
+    for (const auto& branch_name : branch_name_in_vec_) {
+      branch_int_vec_[branch_name] = new std::vector<int>();
+      tree->Branch(branch_name.c_str(), "std::vector<int>", &(branch_int_vec_[branch_name]));
+    }
+  }
+
   systematics = Systematics(distats);
 
   setupJetCorrections(year, outfile);
@@ -1635,6 +1654,11 @@ void Analyzer::setupGeneral(std::string year) {
        SetBranch("GenMET_pt", genmet_pt);
        SetBranch("GenMET_phi", genmet_phi);
      }
+
+    SetBranch("nLHEPdfWeight", n_lhe_pdf_weight);
+    SetBranch("LHEPdfWeight", lhe_pdf_weight);
+    SetBranch("nLHEScaleWeight", n_lhe_scale_weight);
+    SetBranch("LHEScaleWeight", lhe_scale_weight);
 
    } else {
      nTruePU = 0;
@@ -5119,9 +5143,9 @@ void Analyzer::fill_histogram(std::string year) {
       for(auto it: *groups) {
         fill_Folder(it, maxCut, histo, false);
       }
-      //if(!fillCuts(false)) {
-      //  fill_Tree();
-      //}
+      if (fillCuts(false)) {
+        fill_Tree();
+      }
 
     }else{
       wgt=backup_wgt;
@@ -6135,6 +6159,83 @@ void Analyzer::fill_Tree(){
   }
 }
 */
+
+void Analyzer::fill_Tree() {
+  if (active_part->at(CUTS::eDiJet)->empty()) {
+    return;
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // LargestDiJetMass
+  //////////////////////////////////////////////////////////////////////////////
+  float leaddijetmass = 0.0f;
+  for (const auto it : *active_part->at(CUTS::eDiJet)) {
+    const int p1 = (it) / _Jet->size();
+    const int p2 = (it) % _Jet->size();
+    const TLorentzVector jet1 = _Jet->p4(p1);
+    const TLorentzVector jet2 = _Jet->p4(p2);
+    const TLorentzVector DiJet = jet1 + jet2;
+
+    if (DiJet.M() > leaddijetmass) {
+      leaddijetmass = DiJet.M();
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Jet3MinAbsDPhiMet
+  //////////////////////////////////////////////////////////////////////////////
+  float minDeltaPhiMet = 9999.9;
+  for(auto it : *active_part->at(CUTS::eRJet3)) {
+    float deltaPhiMet = absnormPhi(_Jet->p4(it).Phi() - _MET->phi());
+    if(deltaPhiMet < minDeltaPhiMet){
+       minDeltaPhiMet = deltaPhiMet;
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // NOTE
+  //////////////////////////////////////////////////////////////////////////////
+  for (auto it : branch_float_vec_) {
+    it.second->clear();
+  }
+  for (auto it : branch_int_vec_) {
+    it.second->clear();
+  }
+
+  const int jet_size = static_cast<int>(active_part->at(CUTS::eRJet1)->size());
+  branch_int_["jet_size"] = jet_size;
+  // TODO reserve
+
+  for(auto idx : *active_part->at(CUTS::eRJet1)) {
+    branch_float_vec_.at("jet_pt")->push_back(_Jet->pt(idx));
+    branch_float_vec_.at("jet_eta")->push_back(_Jet->eta(idx));
+    branch_float_vec_.at("jet_phi")->push_back(_Jet->phi(idx));
+    branch_float_vec_.at("jet_mass")->push_back(_Jet->mass(idx));
+  }
+
+  // LargestDiJetMass
+  branch_float_["LargestDiJetMass"] = leaddijetmass;
+  // Jet3MinAbsDPhiMet
+  branch_float_["Jet3MinAbsDPhiMet"] = minDeltaPhiMet;
+  // MET
+  branch_float_["Met"] = _MET->pt();
+  branch_float_["MetPhi"] = _MET->phi();
+  branch_float_["Weight"] = wgt;
+
+  branch_int_.at("n_lhe_pdf_weight") = static_cast<int>(n_lhe_pdf_weight);
+  branch_float_vec_.at("lhe_pdf_weight")->reserve(n_lhe_pdf_weight);
+  for (size_t idx = 0; idx < static_cast<size_t>(n_lhe_pdf_weight); idx++) {
+    branch_float_vec_.at("lhe_pdf_weight")->push_back(lhe_pdf_weight[idx]);
+  }
+
+  branch_int_.at("n_lhe_scale_weight") = static_cast<int>(n_lhe_scale_weight);
+  branch_float_vec_.at("lhe_scale_weight")->reserve(n_lhe_scale_weight);
+  for (size_t idx = 0; idx < static_cast<size_t>(n_lhe_scale_weight); idx++) {
+    branch_float_vec_.at("lhe_scale_weight")->push_back(lhe_scale_weight[idx]);
+  }
+
+  histo.fillTree(tree_name_);
+}
 
 void Analyzer::initializePileupInfo(const bool& specialPU, std::string outfilename){
    // If specialPUcalculation is true, then take the name of the output file (when submitting jobs)

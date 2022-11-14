@@ -302,6 +302,38 @@ public:
   std::vector<std::pair<double, int> > jetPtIndexVector;
 
   // std::unordered_map< std::string,float > zBoostTree;
+  void fill_Tree();
+  const std::string tree_name_ = "tree";
+  // float
+  std::unordered_map<std::string, float> branch_float_;
+  const std::vector<std::string> branche_names_ = {
+      "LargestDiJetMass",
+      "Jet3MinAbsDPhiMet",
+      "Met",
+      "MetPhi",
+      "Weight",
+  };
+  // int
+  std::unordered_map<std::string, int> branch_int_;
+  const std::vector<std::string> int_branch_names_ = {
+      "jet_size",
+      "n_lhe_pdf_weight",
+      "n_lhe_scale_weight",
+  };
+  // vector<float>
+  std::unordered_map<std::string, std::vector<float>* > branch_float_vec_;
+  const std::vector<std::string> branch_name_float_vec_ = {
+      "jet_pt",
+      "jet_eta",
+      "jet_phi",
+      "jet_mass",
+      "lhe_pdf_weight",
+      "lhe_scale_weight",
+  };
+  // vector<int>
+  std::unordered_map<std::string, std::vector<int>* > branch_int_vec_;
+  const std::vector<std::string> branch_name_in_vec_ = {
+  };
 
   double maxIso, minIso;
   int leadIndex, maxCut, crbins=1;
@@ -315,6 +347,14 @@ public:
   float genmet_pt = 0;
   float genmet_phi = 0;
   float gendilepmass = 0;
+
+  static const size_t kSizeLHEPdfWeight_         = 103;
+  static const size_t kSizeLHEScaleWeight_       = 9;
+
+  UInt_t n_lhe_pdf_weight = 0;
+  float lhe_pdf_weight[kSizeLHEPdfWeight_];
+  UInt_t n_lhe_scale_weight = 0;
+  float lhe_scale_weight[kSizeLHEScaleWeight_];
 
   // Met filters' variables
   bool applymetfilters = false;

@@ -48,6 +48,7 @@ public:
   void setControlRegions();
   void createTree(std::unordered_map< std::string , float >*, std::string);
   void fillTree(std::string);
+  TTree* getTree(const std::string treename) {return trees.at(treename);}
   std::string outname;
 
 
