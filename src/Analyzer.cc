@@ -266,13 +266,12 @@ Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool s
   }
 
   // Check if this is a W/Z+jets sample for the purposes of applying Z-pt corrections.
-  if((infiles[0].find("WJets") != std::string::npos) || (infiles[0].find("DY") != std::string::npos) || (infiles[0].find("EWKWPlus") != std::string::npos)
-    || (infiles[0].find("EWKWMinus") != std::string::npos) || (infiles[0].find("Z2Jets") != std::string::npos)){
-    isVSample = true;
-  }
-  else{
-    isVSample = false;
-  }
+  isVSample =    (infiles[0].find("WJets") != std::string::npos)
+              or (infiles[0].find("DY") != std::string::npos)
+              or (infiles[0].find("ZJetsToNuNu") != std::string::npos)
+              or (infiles[0].find("EWKWPlus") != std::string::npos)
+              or (infiles[0].find("EWKWMinus") != std::string::npos)
+              or (infiles[0].find("Z2Jets") != std::string::npos);
 
   initializeWkfactor(infiles);
   setCutNeeds();
@@ -5065,7 +5064,7 @@ void Analyzer::fill_histogram(std::string year) {
 
   const std::vector<std::string>* groups = histo.get_groups();
 
-  double ZpTWeight_vbfSusy = -1.0;
+  double ZpTWeight_vbfSusy = 1.0;
 
   if(!isData){
     wgt = 1.;
@@ -5079,20 +5078,23 @@ void Analyzer::fill_histogram(std::string year) {
     if(distats["Run"].bfind("ApplyTauIDSF")) wgt *= getTauIdSFs(true, distats["Run"].bfind("TauIdSFsByDM"), distats["Run"].bfind("ApplyTauAntiEleSF"), distats["Run"].bfind("ApplyTauAntiMuSF"), "");
 
     // Apply Z-boost weights derived for ISR+stau analysis (SUS-19-002)
-    if(distats["Run"].bfind("ApplyISRZBoostSF") && isVSample){
-      //wgt *= getZBoostWeight();
-      wgt *= getZBoostWeightSyst(0);
-      boosters[0] = getZBoostWeightSyst(0); //06.02.20
-      boosters[1] = getZBoostWeightSyst(-1);  //06.02.20
-      boosters[2] = getZBoostWeightSyst(1);  //06.02.20
+    if (isVSample) {
+      if (distats["Run"].bfind("ApplyISRZBoostSF")){
+        //wgt *= getZBoostWeight();
+        wgt *= getZBoostWeightSyst(0);
+        boosters[0] = getZBoostWeightSyst(0); //06.02.20
+        boosters[1] = getZBoostWeightSyst(-1);  //06.02.20
+        boosters[2] = getZBoostWeightSyst(1);  //06.02.20
+
+      } else if (distats["Run"].bfind("ApplySUSYZBoostSF")) {
+        wgt *= getZpTWeight();
+
+      } else if (distats["Run"].bfind("ApplyVBFSusyZBoostSF")) {
+        ZpTWeight_vbfSusy = getZpTWeight_vbfSusy(year);
+        wgt *= ZpTWeight_vbfSusy;
+      }
     }
-    else if(distats["Run"].bfind("ApplySUSYZBoostSF") && isVSample){
-      wgt *= getZpTWeight();
-    }
-    else if(distats["Run"].bfind("ApplyVBFSusyZBoostSF") && isVSample){
-      ZpTWeight_vbfSusy = getZpTWeight_vbfSusy(year);
-      wgt *= ZpTWeight_vbfSusy;
-    }
+
     if(distats["Run"].bfind("ApplyWKfactor")){
       wgt *= getWkfactor();
     }
@@ -5108,14 +5110,14 @@ void Analyzer::fill_histogram(std::string year) {
   backup_wgt=wgt;
 
 
-  for(size_t i = 0; i < syst_names.size(); i++) {
+  for(size_t syst_idx = 0; syst_idx < syst_names.size(); syst_idx++) {
 
-    for(Particle* ipart: allParticles) ipart->setCurrentP(i);
-    _MET->setCurrentP(i);
+    for(Particle* ipart: allParticles) ipart->setCurrentP(syst_idx);
+    _MET->setCurrentP(syst_idx);
 
-    active_part = &syst_parts.at(i);
+    active_part = &syst_parts.at(syst_idx);
 
-    if(i == 0) {
+    if(syst_idx == 0) {
       active_part = &goodParts;
       fillCuts(true);
       if(isSignalMC && !finalInputSignal) continue;
@@ -5129,34 +5131,34 @@ void Analyzer::fill_histogram(std::string year) {
     }else{
       wgt=backup_wgt;
 
-      if(syst_names[i].find("weight")!=std::string::npos){
+      if(syst_names[syst_idx].find("weight")!=std::string::npos){
         // ---------- Tau ID scale factors ---------- //
-        if(syst_names[i]=="Tau_weight_Up"){
+        if(syst_names[syst_idx]=="Tau_weight_Up"){
           if(distats["Run"].bfind("ApplyTauIDSF")) {
             // Arguments: getTauIdSFs(bool getTauIDsf, bool getTauIDbyDMsfs, bool getAntiElesf, bool getAntiMusf, std::string uncertainty)
             wgt /= getTauIdSFs(true, distats["Run"].bfind("TauIdSFsByDM"), distats["Run"].bfind("ApplyTauAntiEleSF"), distats["Run"].bfind("ApplyTauAntiMuSF"), "");
             wgt *= getTauIdSFs(true, distats["Run"].bfind("TauIdSFsByDM"), distats["Run"].bfind("ApplyTauAntiEleSF"), distats["Run"].bfind("ApplyTauAntiMuSF"), "Up");
           }
-        }else if(syst_names[i]=="Tau_weight_Down"){
+        }else if(syst_names[syst_idx]=="Tau_weight_Down"){
           if(distats["Run"].bfind("ApplyTauIDSF")) {
             wgt /= getTauIdSFs(true, distats["Run"].bfind("TauIdSFsByDM"), distats["Run"].bfind("ApplyTauAntiEleSF"), distats["Run"].bfind("ApplyTauAntiMuSF"), "");
             wgt *= getTauIdSFs(true, distats["Run"].bfind("TauIdSFsByDM"), distats["Run"].bfind("ApplyTauAntiEleSF"), distats["Run"].bfind("ApplyTauAntiMuSF"), "Down");
           }
         }
         // ---------- Pileup weights ---------- //
-        if(syst_names[i]=="Pileup_weight_Up"){
+        if(syst_names[syst_idx]=="Pileup_weight_Up"){
           if(distats["Run"].bfind("UsePileUpWeight")) {
             wgt/=   pu_weight;
             wgt *= hist_pu_wgt_up->GetBinContent(hist_pu_wgt_up->FindBin(nTruePU));
           }
-        }else if(syst_names[i]=="Pileup_weight_Down"){
+        }else if(syst_names[syst_idx]=="Pileup_weight_Down"){
           if(distats["Run"].bfind("UsePileUpWeight")) {
             wgt/=   pu_weight;
             wgt *= hist_pu_wgt_do->GetBinContent(hist_pu_wgt_do->FindBin(nTruePU));
           }
         }
         // --------- Prefiring weights ----------- //
-        if(syst_names[i]=="L1Prefiring_weight_Up"){
+        if(syst_names[syst_idx]=="L1Prefiring_weight_Up"){
           if(distats["Run"].bfind("ApplyL1PrefiringWeight")){
             // wgt /= prefiringwgtprod.getPrefiringWeight("");
             wgt /= l1prefiringwgt;
@@ -5165,7 +5167,7 @@ void Analyzer::fill_histogram(std::string year) {
             // std::cout << "prefiring wgt up = " << l1prefiringwgt_up << std::endl;
             wgt *= l1prefiringwgt_up;
           }
-        } else if(syst_names[i]=="L1Prefiring_weight_Down"){
+        } else if(syst_names[syst_idx]=="L1Prefiring_weight_Down"){
           if(distats["Run"].bfind("ApplyL1PrefiringWeight")){
             // wgt /= prefiringwgtprod.getPrefiringWeight("");
             wgt /= l1prefiringwgt;
@@ -5176,24 +5178,24 @@ void Analyzer::fill_histogram(std::string year) {
 
       }
 
-      if(syst_names[i].find("Btag")!=std::string::npos){ //01.16.19
-        if(syst_names[i]=="Btag_Up"){
+      if(syst_names[syst_idx].find("Btag")!=std::string::npos){ //01.16.19
+        if(syst_names[syst_idx]=="Btag_Up"){
           wgt/=getBJetSF(CUTS::eRBJet, _Jet->pstats["BJet"]);
           wgt*=getBJetSFResUp(CUTS::eRBJet, _Jet->pstats["BJet"]);
-        }else if(syst_names[i]=="Btag_Down"){
+        }else if(syst_names[syst_idx]=="Btag_Down"){
           wgt/=getBJetSF(CUTS::eRBJet, _Jet->pstats["BJet"]);
           wgt*=getBJetSFResDown(CUTS::eRBJet, _Jet->pstats["BJet"]);
         }
       }
 
       ///---06.06.20---
-      if(syst_names[i].find("ISR_weight")!=std::string::npos){ //07.09.18
-        if(syst_names[i]=="ISR_weight_up"){
+      if(syst_names[syst_idx].find("ISR_weight")!=std::string::npos){ //07.09.18
+        if(syst_names[syst_idx]=="ISR_weight_up"){
           if(distats["Run"].bfind("ApplyISRZBoostSF") && isVSample) {
             wgt/=boosters[0];
             wgt*=boosters[2];
           }
-        }else if(syst_names[i]=="ISR_weight_down"){
+        }else if(syst_names[syst_idx]=="ISR_weight_down"){
           if(distats["Run"].bfind("ApplyISRZBoostSF") && isVSample) {
             wgt/=boosters[0];
             wgt*=boosters[1];
@@ -5202,21 +5204,16 @@ void Analyzer::fill_histogram(std::string year) {
       }
       ///---06.02.20
 
+      if (distats["Run"].bfind("ApplyVBFSusyZBoostSF") and isVSample) {
+        if (syst_names[syst_idx] == "VBFSusyZBoostSF_weight_Up") {
+          wgt *= ZpTWeight_vbfSusy;
 
-      if(syst_names[i].find("VBFSusyZBoostSF_weight_")!=std::string::npos){
-        if(syst_names[i]=="VBFSusyZBoostSF_weight_Up"){
-          if(distats["Run"].bfind("ApplyVBFSusyZBoostSF") && isVSample) {
-            wgt *= ZpTWeight_vbfSusy;
-          }
-        }else if(syst_names[i]=="VBFSusyZBoostSF_weight_Down"){
-          if(distats["Run"].bfind("ApplyVBFSusyZBoostSF") && isVSample) {
-            wgt /= ZpTWeight_vbfSusy;
-          }
+        } else if (syst_names[syst_idx]=="VBFSusyZBoostSF_weight_Down") {
+          wgt /= ZpTWeight_vbfSusy;
+
         }
       }
-
-
-    }
+    } // if (syst_idx != 0)
 
     //get the non particle conditions:
     for(auto itCut : nonParticleCuts){
@@ -5226,7 +5223,7 @@ void Analyzer::fill_histogram(std::string year) {
     if(!fillCuts(false)) continue;
 
     for(auto it: *syst_histo.get_groups()) {
-      fill_Folder(it, i, syst_histo, true);
+      fill_Folder(it, syst_idx, syst_histo, true);
     }
     wgt=backup_wgt;
   }
