@@ -2096,7 +2096,7 @@ void Analyzer::smearLepton(Lepton& lep, CUTS eGenPos, const PartStats& stats, co
     for(size_t i = 0; i < lep.size(); i++) {
       TLorentzVector lepReco = lep.RecoP4(i);
       TLorentzVector genVec =  matchLeptonToGen(lepReco, lep.pstats["Smear"],eGenPos);
-      systematics.shiftLepton(lep, lepReco, genVec, _MET->systdeltaMEx[syst], _MET->systdeltaMEy[syst], syst);
+      systematics.shiftLepton(lep, lepReco, genVec, _MET->systdeltaMEx[syst], _MET->systdeltaMEy[syst], syst, systname);
     }
   }
 }

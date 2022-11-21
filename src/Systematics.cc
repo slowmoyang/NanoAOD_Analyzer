@@ -64,3 +64,77 @@ void Systematics::loadScaleRes(const PartStats& smear, const PartStats& syst, st
     resolution=1;
   }
 }
+
+void Systematics::shiftLepton(Lepton& lepton,
+                              TLorentzVector recoLep,
+                              TLorentzVector genLep,
+                              double& dPx,
+                              double& dPy,
+                              int syst,
+                              std::string syst_name) {
+  if (genLep == TLorentzVector(0.0, 0.0, 0.0, 0.0)) {
+    lepton.addP4Syst(recoLep, syst);
+    return;
+  }
+
+  double scale_shift = 0.0;
+  bool is_electron_in_transition_region = false;
+  switch (lepton.type) {
+    case PType::Electron: {
+      const double eta = std::abs(recoLep.Eta());
+      if (eta < 1.44) {
+        // barrel
+        scale_shift = 0.01;
+
+      } else if ((eta > 1.57) and (eta < 2.50)) {
+        // endcap
+        scale_shift = 0.025;
+
+      } else {
+        // transition region or forward region
+        scale_shift = 0.00;
+        is_electron_in_transition_region = true;
+      }
+      break;
+    }
+
+    case PType::Muon: {
+      scale_shift = 0.05;
+      break;
+    }
+
+    case PType::Tau: {
+      std::cerr << "it is deprecated to use Systematics::shiftLepton for taus in favour of Analyzer::smearTaus" << std::endl;
+      break;
+    }
+
+    default: {
+      std::cerr << "Systematics::shiftLepton got an unknown Lepton::type: " << static_cast<int>(lepton.type) << std::endl;
+      assert(false);
+    }
+      
+  }
+
+  if (is_electron_in_transition_region) {
+    lepton.addP4Syst(recoLep, syst);
+    return;
+  }
+
+  double scale = 1.0;
+  double resolution = 1.0;
+  if (syst_name.find("_Scale_")) {
+    scale = syst_name.find("_Up") ? 1 + scale_shift : 1 - scale_shift;
+  }
+
+  double ratio = ((genLep.Pt() * scale) + (recoLep.Pt() - genLep.Pt()) * resolution) / recoLep.Pt();
+
+   //add the shifted part up
+   dPx += recoLep.Px() * (ratio - 1);
+   dPy += recoLep.Py() * (ratio - 1);
+
+   //WARNING change the particle content for the particle
+   recoLep *= ratio;
+   lepton.addP4Syst(recoLep, syst);
+
+   return;
+}

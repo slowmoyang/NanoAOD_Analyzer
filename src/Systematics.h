@@ -26,6 +26,7 @@ public:
   void shiftJet(Particle& jet, TLorentzVector recoJet, std::string& syst_name, int syst);
   // void shiftParticle(Particle& jet, TLorentzVector recJet, double const& ratio, double& dPx, double& dPy, int syst);
   void shiftLepton(Lepton& lepton, TLorentzVector recoLep, TLorentzVector genLep, double& dPx, double& dPy, int syst);
+  void shiftLepton(Lepton& lepton, TLorentzVector recoLep, TLorentzVector genLep, double& dPx, double& dPy, int syst, std::string syst_name);
   void loadScaleRes(const PartStats& smear, const PartStats& syst, std::string syst_name);
 
 private:
