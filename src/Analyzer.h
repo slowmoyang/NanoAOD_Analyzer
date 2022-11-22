@@ -303,7 +303,7 @@ public:
 
   // std::unordered_map< std::string,float > zBoostTree;
   void fill_Tree();
-  const std::string tree_name_ = "InvCh_NDiJetCombinations";
+  const std::string tree_name_ = "tree";
   // float
   std::unordered_map<std::string, float> branches_;
   const std::vector<std::string> branche_names_ = {
