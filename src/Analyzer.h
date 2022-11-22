@@ -413,6 +413,7 @@ public:
   clock_t start_time;
   std::chrono::time_point<std::chrono::system_clock> start;
 
+  bool is_ZJetsToNuNu_ = false;
 };
 
 
