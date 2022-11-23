@@ -127,6 +127,11 @@ Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool s
   // New variable to do special PU weight calculation (2017)
   specialPUcalculation = distats["Run"].bfind("SpecialMCPUCalculation");
 
+  use_met_trigger_sf_ = distats["Run"].bfind("UseMetTriggerSF");
+  if (use_met_trigger_sf_) {
+    setupMetTriggerSF(year);
+  }
+
   // If data, always set specialcalculation to false
   if(isData){
     specialPUcalculation = false;
@@ -5085,6 +5090,9 @@ void Analyzer::fill_histogram(std::string year) {
 
   if(!isData){
     wgt = 1.;
+    if (use_met_trigger_sf_) {
+      wgt *= getMetTriggerSF(_MET->pt(), MetTriggerSFType::kNominal);
+    }
     //wgt *= getTopBoostWeight(); //01.15.19
     if(distats["Run"].bfind("UsePileUpWeight")) wgt*= pu_weight;
     if(distats["Run"].bfind("ApplyGenWeight")) wgt *= (gen_weight > 0) ? 1.0 : -1.0;
@@ -5230,6 +5238,19 @@ void Analyzer::fill_histogram(std::string year) {
 
         }
       }
+
+      if (use_met_trigger_sf_) {
+        if (syst_names[syst_idx] == "MetTriggerSF_weight_Up") {
+          wgt /= getMetTriggerSF(_MET->pt(), MetTriggerSFType::kNominal);
+          wgt *= getMetTriggerSF(_MET->pt(), MetTriggerSFType::kUp);
+
+        } else if (syst_names[syst_idx] == "MetTriggerSF_weight_Down") {
+          wgt /= getMetTriggerSF(_MET->pt(), MetTriggerSFType::kNominal);
+          wgt *= getMetTriggerSF(_MET->pt(), MetTriggerSFType::kDown);
+
+        }
+      }
+
     } // if (syst_idx != 0)
 
     //get the non particle conditions:
@@ -6299,6 +6320,59 @@ void Analyzer::initializeWkfactor(std::vector<std::string> infiles) {
   k_mu.Close();
   k_tau.Close();
 
+}
+
+void Analyzer::setupMetTriggerSF(const std::string year) {
+  TFile met_eff_file{(PUSPACE + "MET_Eff.root").c_str()};
+
+  auto year_dir = dynamic_cast<TDirectoryFile*>(met_eff_file.Get( ("Run" + year).c_str() ));
+
+  met_trigger_eff_data_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Nominal"));
+  met_trigger_eff_data_up_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Up"));
+  met_trigger_eff_data_down_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Down"));
+  met_trigger_eff_mc_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Nominal"));
+  met_trigger_eff_mc_up_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Up"));
+  met_trigger_eff_mc_down_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Down"));
+  met_eff_file.Close();
+
+  //TODO check if tf1 is nullptr
+}
+
+double Analyzer::getMetTriggerSF(const double met, const MetTriggerSFType sf_type) {
+  double denominator = -1.0;
+  double numerator = -1.0;
+
+  switch (sf_type) {
+    case MetTriggerSFType::kNominal: {
+      numerator = met_trigger_eff_data_nominal_->Eval(met);
+      denominator = met_trigger_eff_mc_nominal_->Eval(met);
+      break;
+    }
+    case MetTriggerSFType::kUp: {
+      numerator = met_trigger_eff_data_up_->Eval(met);
+      denominator = met_trigger_eff_mc_down_->Eval(met);
+      
+      break;
+    }
+    case MetTriggerSFType::kDown: {
+      numerator = met_trigger_eff_data_down_->Eval(met);
+      denominator = met_trigger_eff_mc_up_->Eval(met);
+      
+      break;
+    }
+    default: {
+      std::cerr << "unknwon MetTriggerSFType: " << static_cast<int>(sf_type) << std::endl;
+      std::abort();
+    }
+      
+  }
+
+  if ((numerator <= 0) or (denominator <= 0)) {
+    std::cerr << "getMetTriggerSF: got unexpected number: numerator=" << numerator << " and denominator=" << denominator << std::endl;
+    std::abort();
+  }
+  const double scale_factor = numerator / denominator;
+  return scale_factor;
 }
 
 ///Normalizes phi to be between -PI and PI

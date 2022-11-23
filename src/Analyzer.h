@@ -373,6 +373,23 @@ public:
   std::chrono::time_point<std::chrono::system_clock> start;
 
   bool is_ZJetsToNuNu_ = false;
+
+  bool use_met_trigger_sf_;
+
+  const TF1* met_trigger_eff_data_nominal_ = nullptr;
+  const TF1* met_trigger_eff_data_up_ = nullptr;
+  const TF1* met_trigger_eff_data_down_ = nullptr;
+  const TF1* met_trigger_eff_mc_nominal_ = nullptr;
+  const TF1* met_trigger_eff_mc_up_ = nullptr;
+  const TF1* met_trigger_eff_mc_down_ = nullptr;
+
+  enum class MetTriggerSFType {
+    kNominal = 0,
+    kUp,
+    kDown,
+  };
+  void setupMetTriggerSF(const std::string); 
+  double getMetTriggerSF(const double, const MetTriggerSFType);
 };
 
 
