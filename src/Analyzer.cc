@@ -6323,19 +6323,55 @@ void Analyzer::initializeWkfactor(std::vector<std::string> infiles) {
 }
 
 void Analyzer::setupMetTriggerSF(const std::string year) {
-  TFile met_eff_file{(PUSPACE + "MET_Eff.root").c_str()};
+  TFile met_eff_file{(PUSPACE + "MetTrigger.root").c_str()};
 
-  auto year_dir = dynamic_cast<TDirectoryFile*>(met_eff_file.Get( ("Run" + year).c_str() ));
+  const std::string year_dir_path = "Run" + year;
 
-  met_trigger_eff_data_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Nominal"));
-  met_trigger_eff_data_up_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Up"));
-  met_trigger_eff_data_down_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_Data_Down"));
-  met_trigger_eff_mc_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Nominal"));
-  met_trigger_eff_mc_up_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Up"));
-  met_trigger_eff_mc_down_ = dynamic_cast<const TF1*>(year_dir->Get("MET_Eff_MC_Down"));
+  if (auto year_dir = dynamic_cast<TDirectoryFile*>(met_eff_file.Get(year_dir_path.c_str()))) {
+    met_trigger_eff_data_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_Data_Nominal"));
+    met_trigger_eff_data_up_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_Data_Up"));
+    met_trigger_eff_data_down_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_Data_Down"));
+    met_trigger_eff_mc_nominal_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_MC_Nominal"));
+    met_trigger_eff_mc_up_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_MC_Up"));
+    met_trigger_eff_mc_down_ = dynamic_cast<const TF1*>(year_dir->Get("Met_Trigger_Eff_MC_Down"));
+
+  } else {
+    std::cerr << "failed to get " << year_dir_path << std::endl;
+    std::abort();
+
+  }
+
   met_eff_file.Close();
 
   //TODO check if tf1 is nullptr
+  bool has_error = false;
+  if (met_trigger_eff_data_nominal_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_Data_Nominal" << std::endl;
+    has_error = true;
+  }
+  if (met_trigger_eff_data_up_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_Data_Up" << std::endl;
+    has_error = true;
+  }
+  if (met_trigger_eff_data_down_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_Data_Down" << std::endl;
+    has_error = true;
+  }
+  if (met_trigger_eff_mc_nominal_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_MC_Nominal" << std::endl;
+    has_error = true;
+  }
+  if (met_trigger_eff_mc_up_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_MC_Up" << std::endl;
+    has_error = true;
+  }
+  if (met_trigger_eff_mc_down_ == nullptr) {
+    std::cerr << "[NOT FOUND] Met_Trigger_Eff_MC_Down" << std::endl;
+    has_error = true;
+  }
+  if (has_error) {
+    std::abort();
+  }
 }
 
 double Analyzer::getMetTriggerSF(const double met, const MetTriggerSFType sf_type) {
