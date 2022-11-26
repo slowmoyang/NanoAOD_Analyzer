@@ -307,39 +307,65 @@ public:
   // float
   std::unordered_map<std::string, float> branches_;
   const std::vector<std::string> branche_names_ = {
-      "LargestDiJetMass",
-      "Jet3MinAbsDPhiMet",
-      "LargestMassDiJetPosSideJetQGL",
-      "LargestMassDiJetNegSideJetQGL",
-      "Met",
-      "MetPhi",
-      "Weight",
+    "gen_weight",
+    "gen_met_pt",
+    "gen_met_phi",
+    "matched_jet_0_pt",
+    "matched_jet_0_eta",
+    "matched_jet_0_phi",
+    "matched_jet_0_mass",
+    "matched_jet_1_pt",
+    "matched_jet_1_eta",
+    "matched_jet_1_phi",
+    "matched_jet_1_mass",
+    "matched_dijet_pt",
+    "matched_dijet_eta",
+    "matched_dijet_phi",
+    "matched_dijet_mass",
   };
   // int
   std::unordered_map<std::string, int> int_branches_;
   const std::vector<std::string> int_branch_names_ = {
-      "jet_size"
+    "matched_jet_0_parton_flavor",
+    "matched_jet_1_parton_flavor",
+    "matched_jet_0_quark_pid",
+    "matched_jet_1_quark_pid",
+    "matched_jet_0_quark_idx",
+    "matched_jet_1_quark_idx",
+    "num_n1",
+    "num_n2",
+    "num_c1",
+    "num_stau",
+  };
+  // bool
+  std::unordered_map<std::string, bool> bool_branches_;
+  const std::vector<std::string> bool_branch_names_ = {
+    "has_two_outgoing_quarks",
+    "is_jet_parton_matched",
   };
   // vector<float>
   std::unordered_map<std::string, std::vector<float>* > float_vec_branches_;
   const std::vector<std::string> float_vec_branch_names_ = {
-      "jet_pt",
-      "jet_eta",
-      "jet_phi",
-      "jet_mass",
-      "jet_chEmEf",
-      "jet_chHEF",
-      "jet_neEmEF",
-      "jet_neHEF",
-      "jet_qgl",
-      "jet_area",
+    "n1_pt",
+    "n1_eta",
+    "n1_phi",
+    "n1_mass",
+    "n2_pt",
+    "n2_eta",
+    "n2_phi",
+    "n2_mass",
+    "c1_pt",
+    "c1_eta",
+    "c1_phi",
+    "c1_mass",
+    "stau_pt",
+    "stau_eta",
+    "stau_phi",
+    "stau_mass",
   };
   // vector<int>
   std::unordered_map<std::string, std::vector<int>* > int_vec_branches_;
   const std::vector<std::string> int_vec_branch_names_ = {
-      "jet_nConstituents",
-      "jet_nElectrons",
-      "jet_nMuons",
   };
 
 
@@ -414,6 +440,9 @@ public:
   std::chrono::time_point<std::chrono::system_clock> start;
 
   bool is_ZJetsToNuNu_ = false;
+
+  void analyzeMatchedGenJet();
+  void analyzeSusy();
 };
 
 

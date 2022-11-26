@@ -241,6 +241,10 @@ Analyzer::Analyzer(std::vector<std::string> infiles, std::string outfile, bool s
       int_branches_[branch_name] = 0;
       tree->Branch(branch_name.c_str(), &int_branches_[branch_name], (branch_name + "/I").c_str());
     }
+    for (const auto& branch_name : bool_branch_names_) {
+      bool_branches_[branch_name] = 0;
+      tree->Branch(branch_name.c_str(), &bool_branches_[branch_name], (branch_name + "/O").c_str());
+    }
     for (const auto& branch_name : float_vec_branch_names_) {
       float_vec_branches_[branch_name] = new std::vector<float>();
       tree->Branch(branch_name.c_str(), "std::vector<float>", &(float_vec_branches_[branch_name]));
@@ -6139,105 +6143,150 @@ void Analyzer::fill_Folder(std::string group, const int max, Histogramer &ihisto
   }
 }
 
-/*
-void Analyzer::fill_Tree(){
+void Analyzer::analyzeMatchedGenJet() {
+  /////////////////////////////////////////////////////////////////////////////
+  // Find outgoing quarks
+  // assuming pythia8
+  /////////////////////////////////////////////////////////////////////////////
+  std::vector<size_t> outgoing_quark_indices;
+  for (size_t idx = 0; idx < _Gen->size(); idx++) {
+    const int status = _Gen->status[idx];
+    const int pdg_id = std::abs(_Gen->pdg_id[idx]);
+    const int mother_idx = _Gen->genPartIdxMother[idx];
 
-  if(0){
-    //do our dirty tree stuff here:
-    int p1=-1;
-    int p2=-1;
-    if(active_part->at(CUTS::eDiTau)->size()==1){
-      p1= active_part->at(CUTS::eDiTau)->at(0) / BIG_NUM;
-      p2= active_part->at(CUTS::eDiTau)->at(0) % BIG_NUM;
-    } else{
-      return;
+    if ((status == 23) and (pdg_id <= 5) and (mother_idx <= 1)) {
+      outgoing_quark_indices.push_back(idx);
     }
-    int j1=-1;
-    int j2=-1;
-    double mass=0;
-    for(auto it : *active_part->at(CUTS::eDiJet)) {
-      int j1tmp= (it) / _Jet->size();
-      int j2tmp= (it) % _Jet->size();
-      if(diParticleMass(_Jet->p4(j1tmp),_Jet->p4(j2tmp),"")>mass){
-        j1=j1tmp;
-        j2=j2tmp;
-        mass=diParticleMass(_Jet->p4(j1tmp),_Jet->p4(j2tmp),"");
+  }
+
+  const bool has_two_outgoing_quarks = outgoing_quark_indices.size() == 2;
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Jet-Parton Matching
+  /////////////////////////////////////////////////////////////////////////////
+  std::map<size_t, size_t> quark_to_jet_map;
+  for (size_t quark_idx : outgoing_quark_indices) {
+    const TLorentzVector quark = _Gen->p4(quark_idx);
+
+    for (size_t jet_idx = 0; jet_idx < _GenJet->size(); jet_idx++){
+      const TLorentzVector jet = _GenJet->p4(jet_idx);
+
+      const double delta_r = std::hypot(jet.Eta() - quark.Eta(), jet.Phi() - quark.Phi());
+      if (delta_r < 0.3) {
+        quark_to_jet_map.insert({quark_idx, jet_idx});
+        break;
       }
     }
-    if(p1<0 or p2<0 or j1<0 or j2 <0)
-      return;
-    zBoostTree["tau1_pt"]   = _Tau->pt(p1);
-    zBoostTree["tau1_eta"]  = _Tau->eta(p1);
-    zBoostTree["tau1_phi"]  = _Tau->phi(p1);
-    zBoostTree["tau2_pt"]   = _Tau->pt(p2);
-    zBoostTree["tau2_eta"]  = _Tau->eta(p2);
-    zBoostTree["tau2_phi"]  = _Tau->phi(p2);
-    zBoostTree["tau_mass"]  = diParticleMass(_Tau->p4(p1),_Tau->p4(p2),"");
-    zBoostTree["met"]       = _MET->pt();
-    zBoostTree["mt_tau1"]   = calculateLeptonMetMt(_Tau->p4(p1));
-    zBoostTree["mt_tau2"]   = calculateLeptonMetMt(_Tau->p4(p2));
-    zBoostTree["mt2"]       = _MET->MT2(_Tau->p4(p1),_Tau->p4(p2));
-    zBoostTree["cosDphi1"]  = absnormPhi(_Tau->phi(p1) - _MET->phi());
-    zBoostTree["cosDphi2"]  = absnormPhi(_Tau->phi(p2) - _MET->phi());
-    zBoostTree["jet1_pt"]   = _Jet->pt(j1);
-    zBoostTree["jet1_eta"]  = _Jet->eta(j1);
-    zBoostTree["jet1_phi"]  = _Jet->phi(j1);
-    zBoostTree["jet2_pt"]   = _Jet->pt(j2);
-    zBoostTree["jet2_eta"]  = _Jet->eta(j2);
-    zBoostTree["jet2_phi"]  = _Jet->phi(j2);
-    zBoostTree["jet_mass"]  = mass;
-    zBoostTree["weight"]    = wgt;
-
-    //put it accidentally in the tree
-    histo.fillTree("TauTauTree");
   }
+
+  const bool is_jet_parton_matched = quark_to_jet_map.size() == 2;
+
+  int matched_jet_0_idx = -1;
+  int matched_jet_1_idx = -1;
+  int matched_jet_0_quark_idx = -1;
+  int matched_jet_1_quark_idx = -1;
+  TLorentzVector matched_jet_0;
+  TLorentzVector matched_jet_1;
+  if (is_jet_parton_matched) {
+    const int jet_0_idx = static_cast<int>(quark_to_jet_map.at(outgoing_quark_indices.at(0)));
+    const int jet_1_idx = static_cast<int>(quark_to_jet_map.at(outgoing_quark_indices.at(1)));
+
+    const bool is_jet_0_lead = _GenJet->pt(jet_0_idx) > _GenJet->pt(jet_1_idx);
+    matched_jet_0_idx = is_jet_0_lead ? jet_0_idx : jet_1_idx;
+    matched_jet_1_idx = is_jet_0_lead ? jet_1_idx : jet_0_idx;
+
+    matched_jet_0_quark_idx = is_jet_0_lead ? outgoing_quark_indices.at(0) : outgoing_quark_indices.at(1);
+    matched_jet_1_quark_idx = is_jet_0_lead ? outgoing_quark_indices.at(1) : outgoing_quark_indices.at(0);
+
+    matched_jet_0 = _GenJet->p4(matched_jet_0_idx);
+    matched_jet_1 = _GenJet->p4(matched_jet_1_idx);
+  }
+  const TLorentzVector matched_dijet = matched_jet_0 + matched_jet_1;
+
+  //
+  bool_branches_.at("has_two_outgoing_quarks") = has_two_outgoing_quarks;
+  bool_branches_.at("is_jet_parton_matched") = is_jet_parton_matched;
+  // matched jet 0
+  branches_.at("matched_jet_0_pt") = matched_jet_0.Pt();
+  branches_.at("matched_jet_0_eta") = matched_jet_0.Eta();
+  branches_.at("matched_jet_0_phi") = matched_jet_0.Phi();
+  branches_.at("matched_jet_0_mass") = matched_jet_0.M();
+  int_branches_.at("matched_jet_0_parton_flavor") = is_jet_parton_matched ? _GenJet->genPartonFlavor[matched_jet_0_idx] : 0;
+  int_branches_.at("matched_jet_0_quark_pid") = is_jet_parton_matched ? _Gen->pdg_id[matched_jet_0_quark_idx] : 0;
+  int_branches_.at("matched_jet_0_quark_idx") = matched_jet_0_quark_idx;
+  // matched jet 1
+  branches_.at("matched_jet_1_pt") = matched_jet_1.Pt();
+  branches_.at("matched_jet_1_eta") = matched_jet_1.Eta();
+  branches_.at("matched_jet_1_phi") = matched_jet_1.Phi();
+  branches_.at("matched_jet_1_mass") = matched_jet_1.M();
+  int_branches_.at("matched_jet_0_parton_flavor") = is_jet_parton_matched ? _GenJet->genPartonFlavor[matched_jet_1_idx] : 0;
+  int_branches_.at("matched_jet_1_quark_pid") = is_jet_parton_matched ? _Gen->pdg_id[matched_jet_1_quark_idx] : 0;
+  int_branches_.at("matched_jet_1_quark_idx") = matched_jet_1_quark_idx;
+  // matched jet 1
+  // matched dijet
+  branches_.at("matched_dijet_pt") = matched_dijet.Pt();
+  branches_.at("matched_dijet_eta") = matched_dijet.Eta();
+  branches_.at("matched_dijet_phi") = matched_dijet.Phi();
+  branches_.at("matched_dijet_mass") = matched_dijet.M();
+
+  std::cout << "DiJetMass = " << matched_dijet.M() << std::endl;
+
+
 }
-*/
+
+
+void Analyzer::analyzeSusy() {
+  int num_n1 = 0;
+  int num_n2 = 0;
+  int num_c1 = 0;
+  int num_stau = 0;
+
+  for(size_t idx = 0; idx < genSUSYPartIndex.size(); idx++) {
+    const size_t susy_idx = genSUSYPartIndex.at(idx);
+    const int particle_id = std::abs(_Gen->pdg_id[susy_idx]);
+    const TLorentzVector p4 = _Gen->p4(susy_idx);
+
+    if (particle_id == 1000022) {
+      num_n1++;
+      float_vec_branches_.at("n1_pt")->push_back(p4.Pt());
+      float_vec_branches_.at("n1_eta")->push_back(p4.Eta());
+      float_vec_branches_.at("n1_phi")->push_back(p4.Phi());
+      float_vec_branches_.at("n1_mass")->push_back(p4.M());
+
+    } else if (particle_id == 1000023) {
+      num_n2++;
+      float_vec_branches_.at("n2_pt")->push_back(p4.Pt());
+      float_vec_branches_.at("n2_eta")->push_back(p4.Eta());
+      float_vec_branches_.at("n2_phi")->push_back(p4.Phi());
+      float_vec_branches_.at("n2_mass")->push_back(p4.M());
+
+    } else if (particle_id == 1000024) {
+      num_c1++;
+      float_vec_branches_.at("c1_pt")->push_back(p4.Pt());
+      float_vec_branches_.at("c1_eta")->push_back(p4.Eta());
+      float_vec_branches_.at("c1_phi")->push_back(p4.Phi());
+      float_vec_branches_.at("c1_mass")->push_back(p4.M());
+
+    }
+  }
+
+  for (size_t idx = 0; idx < genSUSYPartIndexStau.size(); idx++) {
+    const int susy_idx = genSUSYPartIndexStau.at(idx);
+    const TLorentzVector p4 = _Gen->p4(susy_idx);
+    num_stau++;
+    float_vec_branches_.at("stau_pt")->push_back(p4.Pt());
+    float_vec_branches_.at("stau_eta")->push_back(p4.Eta());
+    float_vec_branches_.at("stau_phi")->push_back(p4.Phi());
+    float_vec_branches_.at("stau_mass")->push_back(p4.M());
+  }
+
+  int_branches_.at("num_n1") = num_n1;
+  int_branches_.at("num_n2") = num_n2;
+  int_branches_.at("num_c1") = num_c1;
+  int_branches_.at("num_stau") = num_stau;
+}
 
 void Analyzer::fill_Tree() {
-  if (active_part->at(CUTS::eDiJet)->empty()) {
-    return;
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-  // LargestDiJetMass
-  //////////////////////////////////////////////////////////////////////////////
-  float leaddijetmass = 0.0f;
-  float qgl_pos = 0.0f, qgl_neg = 0.0f;
-  for (const auto it : *active_part->at(CUTS::eDiJet)) {
-    const int p1 = (it) / _Jet->size();
-    const int p2 = (it) % _Jet->size();
-    const TLorentzVector jet1 = _Jet->p4(p1);
-    const TLorentzVector jet2 = _Jet->p4(p2);
-    const TLorentzVector DiJet = jet1 + jet2;
-
-    if (DiJet.M() > leaddijetmass) {
-      leaddijetmass = DiJet.M();
-
-      if (jet1.Eta() > 0) {
-        qgl_pos = _Jet->qgl[p1];
-        qgl_neg = _Jet->qgl[p2];
-      } else {
-        qgl_pos = _Jet->qgl[p2];
-        qgl_neg = _Jet->qgl[p1];
-      }
-    }
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Jet3MinAbsDPhiMet
-  //////////////////////////////////////////////////////////////////////////////
-  float minDeltaPhiMet = 9999.9;
-  for(auto it : *active_part->at(CUTS::eRJet3)) {
-    float deltaPhiMet = absnormPhi(_Jet->p4(it).Phi() - _MET->phi());
-    if(deltaPhiMet < minDeltaPhiMet){
-       minDeltaPhiMet = deltaPhiMet;
-    }
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-  // NOTE
-  //////////////////////////////////////////////////////////////////////////////
   for (auto it : float_vec_branches_) {
     it.second->clear();
   }
@@ -6245,39 +6294,11 @@ void Analyzer::fill_Tree() {
     it.second->clear();
   }
 
-  const int jet_size = static_cast<int>(active_part->at(CUTS::eRJet1)->size());
-  int_branches_["jet_size"] = jet_size;
-  // TODO reserve
-
-  for(auto idx : *active_part->at(CUTS::eRJet1)) {
-    float_vec_branches_.at("jet_pt")->push_back(_Jet->pt(idx));
-    float_vec_branches_.at("jet_eta")->push_back(_Jet->eta(idx));
-    float_vec_branches_.at("jet_phi")->push_back(_Jet->phi(idx));
-    float_vec_branches_.at("jet_mass")->push_back(_Jet->mass(idx));
-    float_vec_branches_.at("jet_chEmEf")->push_back(_Jet->chargedEmEnergyFraction[idx]);
-    float_vec_branches_.at("jet_chHEF")->push_back(_Jet->chargedHadronEnergyFraction[idx]);
-    float_vec_branches_.at("jet_neEmEF")->push_back(_Jet->neutralEmEnergyFraction[idx]);
-    float_vec_branches_.at("jet_neHEF")->push_back(_Jet->neutralHadEnergyFraction[idx]);
-    float_vec_branches_.at("jet_qgl")->push_back(_Jet->qgl[idx]);
-    float_vec_branches_.at("jet_area")->push_back(_Jet->area[idx]);
-
-    int_vec_branches_.at("jet_nConstituents")->push_back(_Jet->nConstituents[idx]);
-    int_vec_branches_.at("jet_nElectrons")->push_back(_Jet->nElectrons[idx]);
-    int_vec_branches_.at("jet_nMuons")->push_back(_Jet->nMuons[idx]);
-  }
-
-  // LargestDiJetMass
-  branches_["LargestDiJetMass"] = leaddijetmass;
-  // Jet3MinAbsDPhiMet
-  branches_["Jet3MinAbsDPhiMet"] = minDeltaPhiMet;
-  // QGL
-  branches_["LargestMassDiJetPosSideJetQGL"] = qgl_pos;
-  branches_["LargestMassDiJetNegSideJetQGL"] = qgl_neg;
-  // MET
-  branches_["Met"] = _MET->pt();
-  branches_["MetPhi"] = _MET->phi();
-  branches_["Weight"] = wgt;
-
+  analyzeMatchedGenJet();
+  analyzeSusy();
+  branches_.at("gen_weight") = gen_weight;
+  branches_.at("gen_met_pt") = genmet_pt;
+  branches_.at("gen_met_phi") = genmet_phi;
   histo.fillTree(tree_name_);
 }
 
