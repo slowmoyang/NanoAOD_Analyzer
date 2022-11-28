@@ -44,16 +44,29 @@ Met::Met(TTree* _BOOM, std::string _GenName,  std::vector<std::string> _syst_nam
   syst_MHT.resize(syst_names.size());
   syst_MHTphi.resize(syst_names.size());
 
-  if( std::find(syst_names.begin(), syst_names.end(), "MetUncl_Up") != syst_names.end() && _BOOM->GetListOfBranches()->FindObject((GenName+"_MetUnclustEnUpDeltaX").c_str()) !=0){
-    SetBranch((GenName+"_MetUnclustEnUpDeltaX").c_str(), MetUnclUp[0]);
-    SetBranch((GenName+"_MetUnclustEnUpDeltaY").c_str(), MetUnclUp[1]);
-    Unclup = std::find(syst_names.begin(), syst_names.end(), "MetUncl_Up") -syst_names.begin();
+  const bool has_MetUncl_Up = std::find(syst_names.begin(), syst_names.end(), "MetUncl_Up") != syst_names.end();
+  const bool has_MetUncl_Down = std::find(syst_names.begin(), syst_names.end(), "MetUncl_Down") != syst_names.end();
+  if (has_MetUncl_Up or has_MetUncl_Down) {
+    const TString dx_branch_name = GenName + "_MetUnclustEnUpDeltaX";
+    const TString dy_branch_name = GenName + "_MetUnclustEnUpDeltaY";
+    const bool has_MetUnclustEnUpDeltaX = _BOOM->GetListOfBranches()->FindObject(dx_branch_name) != nullptr;
+    const bool has_MetUnclustEnUpDeltaY = _BOOM->GetListOfBranches()->FindObject(dy_branch_name) != nullptr;
+
+    if (has_MetUnclustEnUpDeltaX and has_MetUnclustEnUpDeltaY) {
+      SetBranch(dx_branch_name, MetUnclustEnUpDeltaXY[0]);
+      SetBranch(dy_branch_name, MetUnclustEnUpDeltaXY[1]);
+    } else {
+      std::cerr << std::boolalpha
+                << "MetUncl_Up=" << has_MetUncl_Up
+                << " and "
+                << "MetUncl_Down=" << has_MetUncl_Down
+                << " but "
+                << dx_branch_name << " " << (has_MetUnclustEnUpDeltaX ? "found" : "not found")
+                << dy_branch_name << " " << (has_MetUnclustEnUpDeltaY ? "found" : "not found")
+                << std::endl;
+    }
   }
-  if( std::find(syst_names.begin(), syst_names.end(), "MetUncl_Down") != syst_names.end() && _BOOM->GetListOfBranches()->FindObject((GenName+"_MetUnclustEnUpDeltaY").c_str()) !=0){
-    SetBranch((GenName+"_MetUnclustEnUpDeltaX").c_str(), MetUnclDown[0]);
-    SetBranch((GenName+"_MetUnclustEnUpDeltaY").c_str(), MetUnclDown[1]);
-    Uncldown = std::find(syst_names.begin(), syst_names.end(), "MetUncl_Down")- syst_names.begin();
-  }
+
   activeSystematic=0;
 }
 
@@ -247,15 +260,14 @@ void Met::propagateUnclEnergyUncty(std::string& systname, int syst){
   float met_px_unclEnshift = systRawMetVec.at(0)->Px(); // 0 refers to the nominal value, which at this point should already have all corrections applied
   float met_py_unclEnshift = systRawMetVec.at(0)->Py();
 
-  if(systname.find("_Up") != std::string::npos){
+  if (systname.find("_Up") != std::string::npos) {
+    met_px_unclEnshift += MetUnclustEnUpDeltaXY[0];
+    met_py_unclEnshift += MetUnclustEnUpDeltaXY[1];
 
-    met_px_unclEnshift = met_px_unclEnshift + MetUnclUp[0];
-    met_py_unclEnshift = met_py_unclEnshift + MetUnclUp[1];
-    }
-    else if(systname.find("_Down") != std::string::npos){
+  } else if (systname.find("_Down") != std::string::npos) {
+    met_px_unclEnshift -= MetUnclustEnUpDeltaXY[0];
+    met_py_unclEnshift -= MetUnclustEnUpDeltaXY[1];
 
-    met_px_unclEnshift = met_px_unclEnshift - MetUnclDown[0];
-    met_py_unclEnshift = met_py_unclEnshift - MetUnclDown[1];
   }
 
   systRawMetVec.at(syst)->SetPxPyPzE(met_px_unclEnshift, met_py_unclEnshift, systRawMetVec.at(syst)->Pz(), TMath::Sqrt(pow(met_px_unclEnshift,2) + pow(met_py_unclEnshift,2)));
